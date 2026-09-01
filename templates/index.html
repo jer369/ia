@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Portal Institucional del Senado
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+<body>
+
+
+<header class="header">
+
+    <div class="logo">
+
+        <div class="logo-icon">
+            S
+        </div>
+
+        <div class="logo-text">
+
+            <strong>
+                SENADO
+            </strong>
+
+            <span>
+                Portal Institucional
+            </span>
+
+        </div>
+
+    </div>
+
+</header>
+
+
+
+<main class="inicio">
+
+    <section class="presentacion">
+
+        <span class="etiqueta">
+            PORTAL INSTITUCIONAL
+        </span>
+
+        <h1>
+            Información del Senado
+        </h1>
+
+        <p>
+            Consulta información institucional,
+            legislativa, fiscalización, gestión,
+            senadores, trámites y servicios.
+        </p>
+
+        <button
+            class="btn-principal"
+            onclick="abrirChat()"
+        >
+            Abrir Asistente Institucional
+        </button>
+
+    </section>
+
+</main>
+
+
+
+<!-- ================================================= -->
+<!-- CHATBOT ÚNICO -->
+<!-- ================================================= -->
+
+<div
+    id="chatbot"
+    class="chatbot"
+>
+
+    <!-- CABECERA -->
+
+    <div class="chat-header">
+
+        <div class="chat-titulo">
+
+            <div class="chat-icon">
+                S
+            </div>
+
+            <div>
+
+                <strong>
+                    Asistente Institucional
+                </strong>
+
+                <small>
+                    Senado
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <button
+            class="cerrar-chat"
+            onclick="cerrarChat()"
+            aria-label="Cerrar asistente"
+        >
+            ×
+        </button>
+
+    </div>
+
+
+    <!-- MENSAJES -->
+
+    <div
+        id="chatMensajes"
+        class="chat-mensajes"
+    >
+
+    </div>
+
+
+    <!-- ESTADO "PENSANDO" -->
+
+    <div
+        id="chatPensando"
+        class="chat-pensando"
+        style="display: none;"
+    >
+
+        <div class="pensando-contenido">
+
+            <span></span>
+            <span></span>
+            <span></span>
+
+            <label>
+                El asistente está pensando...
+            </label>
+
+        </div>
+
+    </div>
+
+
+    <!-- INPUT -->
+
+    <div class="chat-input">
+
+        <button
+            id="btnVoz"
+            onclick="activarVoz()"
+            title="Hablar"
+            type="button"
+        >
+            🎙️
+        </button>
+
+
+        <input
+            id="entradaChat"
+            type="text"
+            placeholder="Escribe tu consulta..."
+            autocomplete="off"
+            onkeydown="if(event.key === 'Enter') enviarMensaje()"
+        >
+
+
+        <button
+            onclick="enviarMensaje()"
+            title="Enviar"
+            type="button"
+        >
+            ➤
+        </button>
+
+    </div>
+
+</div>
+
+
+
+<!-- BOTÓN FLOTANTE -->
+
+<button
+    id="botonChat"
+    onclick="abrirChat()"
+    aria-label="Abrir asistente"
+>
+    💬
+</button>
+
+
+
+<script
+    src="{{ url_for(
+        'static',
+        filename='script.js'
+    ) }}"
+></script>
+
+
+</body>
+
+</html>
