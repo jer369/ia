@@ -1,0 +1,11 @@
+{
+  "estadisticas": {
+    "proyectos_tratamiento": 15,
+    "proyectos_aprobados": 42,
+    "leyes_sancionadas": 28,
+    "leyes_promulgadas": 18,
+    "proyectos_modificaciones": 7,
+    "proyectos_rechazados": 5
+  },
+  "descripcion": "Información de referencia sobre el estado de proyectos y leyes. Estos datos pueden reemplazarse posteriormente por una API oficial."
+}

@@ -1,31 +1,14 @@
 import os
 import uuid
 
-from flask import (
-    Flask,
-    render_template,
-    request,
-    jsonify,
-    session
-)
-
+from flask import Flask, render_template, request, jsonify, session
+from flask_cors import CORS
 from dotenv import load_dotenv
 
-from services.legislativo import (
-    buscar_informacion,
-    estadisticas
-)
-
+from services.legislativo import buscar_informacion, estadisticas
 from services.chat_service import responder
-
-from services.memory import (
-    limpiar_memoria
-)
-
-from services.api_client import (
-    APIClient
-)
-
+from services.memory import limpiar_memoria
+from services.api_client import APIClient
 
 # ============================================================
 # CONFIGURACIÓN
@@ -33,40 +16,68 @@ from services.api_client import (
 
 load_dotenv()
 
-
 app = Flask(__name__)
 
-
-# Clave para las sesiones de Flask
-app.secret_key = os.getenv(
-    "FLASK_SECRET_KEY",
-    "cambia-esta-clave"
-)
-
-
-# Cliente de APIs institucionales
-api_client = APIClient()
-
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "cambia-esta-clave")
 
 # ============================================================
-# SESIÓN DEL USUARIO
+# CORS - COMUNICACIÓN CON PÁGINA EXPRESS
+# ============================================================
+# LOCAL:
+#   http://localhost:3000
+#   http://127.0.0.1:3000
+# PRODUCCIÓN:
+#   cambia ALLOWED_ORIGINS en .env por el dominio real.
+
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
+    if origin.strip()
+]
+
+CORS(
+    app,
+    resources={r"/api/*": {"origins": allowed_origins}},
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept", "X-Requested-With"],
+    supports_credentials=False,
+    max_age=86400,
+)
+
+api_client = APIClient()
+
+# ============================================================
+# SESIÓN LOCAL DEL PORTAL
 # ============================================================
 
 @app.before_request
 def asegurar_sesion():
+    """Mantiene una sesión para las páginas propias del Portal.
 
+    El widget embebido NO depende de esta cookie. Para permitir
+    comunicación estable entre dominios, el chat utiliza el
+    session_id enviado explícitamente en el JSON.
     """
-    Crea un identificador único para cada conversación.
-
-    Esto permite que el sistema pueda mantener
-    el historial del chat de cada usuario.
-    """
-
     if "session_id" not in session:
+        session["session_id"] = str(uuid.uuid4())
 
-        session["session_id"] = str(
-            uuid.uuid4()
-        )
+
+def obtener_session_id_chat(datos):
+    """Obtiene el identificador enviado por el widget embebido.
+
+    No usamos la cookie de Flask para el widget porque Express y
+    Portal Legislativo pueden estar en dominios distintos.
+    """
+    session_id = str(datos.get("session_id") or "").strip()
+
+    if not session_id:
+        session_id = str(uuid.uuid4())
+
+    # Límite defensivo para evitar valores enormes.
+    return session_id[:128]
 
 
 # ============================================================
@@ -75,14 +86,7 @@ def asegurar_sesion():
 
 @app.get("/")
 def inicio():
-
-    """
-    Página principal del portal.
-    """
-
-    return render_template(
-        "index.html"
-    )
+    return render_template("index.html")
 
 
 # ============================================================
@@ -91,31 +95,13 @@ def inicio():
 
 @app.get("/api/estadisticas")
 def api_estadisticas():
-
-    """
-    Devuelve las estadísticas legislativas,
-    de fiscalización y de gestión.
-    """
-
     try:
-
-        return jsonify(
-            estadisticas()
-        )
-
+        return jsonify(estadisticas())
     except Exception as error:
-
-        print(
-            "Error estadísticas:",
-            error
-        )
-
+        print("Error estadísticas:", error)
         return jsonify({
             "ok": False,
-            "error": (
-                "No se pudieron obtener "
-                "las estadísticas."
-            )
+            "error": "No se pudieron obtener las estadísticas."
         }), 500
 
 
@@ -125,123 +111,77 @@ def api_estadisticas():
 
 @app.get("/api/legislativo/buscar")
 def api_buscar():
-
-    """
-    Busca información dentro de la base institucional.
-
-    Ejemplo:
-
-        /api/legislativo/buscar?q=proyectos de ley
-    """
-
-    q = request.args.get(
-        "q",
-        ""
-    ).strip()
-
+    q = request.args.get("q", "").strip()
 
     if not q:
-
-        return jsonify({
-            "consulta": "",
-            "resultados": []
-        })
-
+        return jsonify({"consulta": "", "resultados": []})
 
     try:
-
-        resultado = buscar_informacion(
-            q
-        )
-
-        return jsonify(
-            resultado
-        )
-
+        return jsonify(buscar_informacion(q))
     except Exception as error:
-
-        print(
-            "Error búsqueda:",
-            error
-        )
-
+        print("Error búsqueda:", error)
         return jsonify({
             "ok": False,
-            "error": (
-                "No se pudo realizar "
-                "la búsqueda."
-            )
+            "error": "No se pudo realizar la búsqueda."
         }), 500
 
 
 # ============================================================
-# CHAT INSTITUCIONAL
+# CHAT INSTITUCIONAL - ENDPOINT DEL SCRIPT EMBEBIDO
 # ============================================================
 
-@app.post("/api/chat")
-@app.post("/chat")
+@app.route("/api/chat", methods=["POST", "OPTIONS"])
+@app.route("/chat", methods=["POST", "OPTIONS"])
 def chat():
+    """Endpoint usado por chat-embed.js.
 
+    JSON aceptado:
+    {
+        "mensaje": "...",
+        "message": "...",
+        "session_id": "..."
+    }
+
+    La sesión se transporta en el JSON, no mediante cookies.
+    Esto permite que el widget funcione desde otro servidor/dominio.
     """
-    Recibe una pregunta del usuario y
-    genera una respuesta institucional.
+    if request.method == "OPTIONS":
+        return ("", 204)
 
-    Acepta:
+    datos = request.get_json(silent=True) or {}
 
-        {
-            "pregunta": "..."
-        }
-
-    o:
-
-        {
-            "message": "..."
-        }
-    """
-
-    datos = request.get_json(
-        silent=True
-    ) or {}
-
-
-    pregunta = (
+    pregunta = str(
         datos.get("pregunta")
+        or datos.get("mensaje")
         or datos.get("message")
         or ""
     ).strip()
 
-
     if not pregunta:
-
         return jsonify({
+            "ok": False,
             "error": "Escribe una consulta."
         }), 400
 
+    session_id = obtener_session_id_chat(datos)
 
     try:
+        resultado = responder(pregunta, session_id)
 
-        resultado = responder(
-            pregunta,
-            session["session_id"]
-        )
+        # Garantiza que el navegador conserve el mismo identificador
+        # incluso si el backend generó uno nuevo.
+        if isinstance(resultado, dict):
+            resultado.setdefault("ok", True)
+            resultado["session_id"] = session_id
 
-        return jsonify(
-            resultado
-        )
-
+        return jsonify(resultado)
 
     except Exception as error:
-
-        print(
-            "Error chat:",
-            error
-        )
-
+        print("Error chat:", error)
         return jsonify({
-            "error": (
-                "Ocurrió un error al "
-                "procesar la consulta."
-            )
+            "ok": False,
+            "error": "Ocurrió un error al procesar la consulta.",
+            "session_id": session_id
         }), 500
 
 
@@ -251,160 +191,64 @@ def chat():
 
 @app.post("/api/tramite")
 def consultar_tramite():
+    datos = request.get_json(silent=True) or {}
 
-    """
-    Consulta el estado de un trámite
-    utilizando la API institucional.
-
-    Recibe:
-
-        {
-            "code": "ABC123",
-            "password": "123456"
-        }
-    """
-
-    datos = request.get_json(
-        silent=True
-    ) or {}
-
-
-    # --------------------------------------------------------
-    # CÓDIGO DEL TRÁMITE
-    # --------------------------------------------------------
-
-    code = str(
-        datos.get(
-            "code",
-            ""
-        )
-    ).strip()
-
-
+    code = str(datos.get("code", "")).strip()
     if not code:
-
         return jsonify({
             "ok": False,
-            "error": (
-                "Debe ingresar el código "
-                "del trámite."
-            )
+            "error": "Debe ingresar el código del trámite."
         }), 400
 
-
-    # --------------------------------------------------------
-    # CONTRASEÑA
-    # --------------------------------------------------------
-
-    password = str(
-        datos.get(
-            "password",
-            ""
-        )
-    ).strip()
-
-
+    password = str(datos.get("password", "")).strip()
     if not password:
-
         return jsonify({
             "ok": False,
-            "error": (
-                "Debe ingresar la contraseña "
-                "del trámite."
-            )
+            "error": "Debe ingresar la contraseña del trámite."
         }), 400
-
-
-    # --------------------------------------------------------
-    # CONSULTAR API
-    # --------------------------------------------------------
 
     try:
-
-        resultado = api_client.consultar_tramite(
-            code,
-            password
-        )
-
-
+        resultado = api_client.consultar_tramite(code, password)
     except Exception as error:
-
-        print(
-            "Error consulta trámite:",
-            error
-        )
-
+        print("Error consulta trámite:", error)
         return jsonify({
             "ok": False,
-            "error": (
-                "No se pudo consultar "
-                "el sistema institucional."
-            )
+            "error": "No se pudo consultar el sistema institucional."
         }), 502
 
+    if not resultado.get("ok", False):
+        return jsonify(resultado), 502
 
-    # --------------------------------------------------------
-    # ERROR DE API
-    # --------------------------------------------------------
-
-    if not resultado.get(
-        "ok",
-        False
-    ):
-
-        return jsonify(
-            resultado
-        ), 502
-
-
-    # --------------------------------------------------------
-    # RESPUESTA EXITOSA
-    # --------------------------------------------------------
-
-    return jsonify(
-        resultado
-    )
+    return jsonify(resultado)
 
 
 # ============================================================
-# LIMPIAR MEMORIA DEL CHAT
+# LIMPIAR MEMORIA
 # ============================================================
 
 @app.post("/api/memoria/limpiar")
 def api_limpiar_memoria():
+    datos = request.get_json(silent=True) or {}
+    session_id = str(datos.get("session_id") or session.get("session_id") or "").strip()
 
-    """
-    Elimina el historial de conversación
-    de la sesión actual.
-    """
-
-    try:
-
-        limpiar_memoria(
-            session["session_id"]
-        )
-
-        return jsonify({
-            "ok": True,
-            "mensaje": (
-                "Conversación limpiada."
-            )
-        })
-
-
-    except Exception as error:
-
-        print(
-            "Error limpiando memoria:",
-            error
-        )
-
+    if not session_id:
         return jsonify({
             "ok": False,
-            "error": (
-                "No se pudo limpiar "
-                "la conversación."
-            )
+            "error": "No se recibió la sesión."
+        }), 400
+
+    try:
+        limpiar_memoria(session_id[:128])
+        return jsonify({
+            "ok": True,
+            "mensaje": "Conversación limpiada.",
+            "session_id": session_id[:128]
+        })
+    except Exception as error:
+        print("Error limpiando memoria:", error)
+        return jsonify({
+            "ok": False,
+            "error": "No se pudo limpiar la conversación."
         }), 500
 
 
@@ -414,15 +258,11 @@ def api_limpiar_memoria():
 
 @app.get("/health")
 def health():
-
-    """
-    Endpoint utilizado para comprobar
-    que el servidor está funcionando.
-    """
-
     return jsonify({
         "ok": True,
-        "servicio": "Portal Legislativo V2"
+        "servicio": "Portal Legislativo V2",
+        "chat": "/api/chat",
+        "allowed_origins": allowed_origins
     })
 
 
@@ -431,23 +271,8 @@ def health():
 # ============================================================
 
 if __name__ == "__main__":
-
-    port = int(
-        os.getenv(
-            "PORT",
-            "5000"
-        )
-    )
-
-
-    debug = (
-        os.getenv(
-            "FLASK_DEBUG",
-            "true"
-        ).lower()
-        == "true"
-    )
-
+    port = int(os.getenv("PORT", "5000"))
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
 
     app.run(
         host="0.0.0.0",
