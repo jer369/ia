@@ -24,57 +24,10 @@
 <body>
 
 
-<header class="header">
-
-    <div class="logo">
-
-        <div class="logo-icon">
-            S
-        </div>
-
-        <div class="logo-text">
-
-            <strong>
-                SENADO
-            </strong>
-
-            <span>
-                Portal Institucional
-            </span>
-
-        </div>
-
-    </div>
-
-</header>
-
-
 
 <main class="inicio">
 
     <section class="presentacion">
-
-        <span class="etiqueta">
-            PORTAL INSTITUCIONAL
-        </span>
-
-        <h1>
-            Información del Senado
-        </h1>
-
-        <p>
-            Consulta información institucional,
-            legislativa, fiscalización, gestión,
-            senadores, trámites y servicios.
-        </p>
-
-        <button
-            class="btn-principal"
-            onclick="abrirChat()"
-        >
-            Abrir Asistente Institucional
-        </button>
-
     </section>
 
 </main>
@@ -96,9 +49,12 @@
 
         <div class="chat-titulo">
 
-            <div class="chat-icon">
-                S
-            </div>
+            <img
+                id="chatHeaderAvatar"
+                class="chat-icon chat-avatar-img"
+                src="{{ url_for('static', filename='cara2/9.png') }}"
+                alt="Asistente Institucional"
+            >
 
             <div>
 
@@ -196,16 +152,20 @@
 
 
 
-<!-- BOTÓN FLOTANTE -->
+<!-- ASISTENTE FLOTANTE -->
 
 <button
     id="botonChat"
     onclick="abrirChat()"
-    aria-label="Abrir asistente"
+    aria-label="Abrir Asistente Institucional"
+    type="button"
 >
-    💬
+    <img
+        id="botonChatAvatar"
+        src="{{ url_for('static', filename='cara2/9.png') }}"
+        alt="Asistente Institucional"
+    >
 </button>
-
 
 
 <script
